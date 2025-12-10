@@ -2,29 +2,25 @@ import { useEffect, useState } from 'react';
 
 // MUI 元件導入
 import {
-  Container,
   Typography,
   Box,
   TextField,
   Button,
-  Paper,
   List,
   ListItem,
   ListItemText,
   ListItemAvatar,
   Avatar,
   IconButton,
-  Chip,
   ThemeProvider,
-  createTheme,
   CssBaseline,
   Stack,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle,
-  styled
+  MenuItem,
+  FormControl
 } from '@mui/material';
 
 // MUI Icons 導入
@@ -38,29 +34,20 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import type { Song } from './types';
 import songApi from './services/api';
 
-// Styled 元件
-const AppContainer = styled(Box)({
-  display: 'flex',
-  justifyContent: 'space-between',
-  width: '100%',
-});
+// 導入主題
+import { darkTheme, lightTheme } from './theme';
 
-// 1. 設定 Dark Mode 主題 (這就是搖滾風！)
-const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#90caf9', // 淺藍色
-    },
-    secondary: {
-      main: '#f48fb1', // 粉紅色 (適合 ZUTOMAYO 風格)
-    },
-    background: {
-      default: '#121212', // 深黑色背景
-      paper: '#1e1e1e',   // 卡片背景
-    },
-  },
-});
+// 導入 Styled 元件
+import {
+  AppContainer,
+  HeaderBox,
+  AddSongPaper,
+  StyledContainer,
+  SongPaper,
+  EmptyStateBox,
+  DialogTitleBox,
+  StatusSelect
+} from './AppStyle';
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -69,6 +56,7 @@ function App() {
 
   const [openDialog, setOpenDialog] = useState(false); // 彈窗開關
   const [deleteId, setDeleteId] = useState<number | null>(null); // 暫存要刪除的 ID
+  const [disabledSongs, setDisabledSongs] = useState<Set<number>>(new Set()); // 記錄正在更新的歌曲 ID
 
   const fetchSongs = async () => {
     try {
@@ -122,6 +110,37 @@ function App() {
     }
   };
 
+  const handleUpdateStatus = async (id: number, newStatus: string) => {
+    // 防止重複更新
+    if (disabledSongs.has(id)) return;
+
+    try {
+      // 標記為 disabled
+      setDisabledSongs(prev => new Set(prev).add(id));
+
+      await songApi.updateStatus(id, newStatus);
+      console.log("狀態更新成功");
+      fetchSongs(); // 重新抓取列表
+
+      // 10 秒後解除 disabled
+      setTimeout(() => {
+        setDisabledSongs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+      }, 10000);
+    } catch (error) {
+      console.error("狀態更新失敗", error);
+      // 如果失敗，立即解除 disabled
+      setDisabledSongs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    }
+  };
+
   return (
     <AppContainer>
       {/* ThemeProvider: 注入主題樣式 */}
@@ -129,21 +148,18 @@ function App() {
         {/* CssBaseline: 類似 normalize.css，並套用背景色 */}
         <CssBaseline />
 
-        <Container sx={{
-
-          py: 4
-        }} maxWidth="sm">
+        <StyledContainer maxWidth="sm">
 
           {/* 標題區塊 */}
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, gap: 2 }}>
+          <HeaderBox>
             <LibraryMusicIcon color="secondary" sx={{ fontSize: 40 }} />
             <Typography variant="h4" component="h1" fontWeight="bold">
               GrooveLog
             </Typography>
-          </Box>
+          </HeaderBox>
 
           {/* 新增歌曲卡片 (Paper 取代 div) */}
-          <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
+          <AddSongPaper elevation={3}>
             <Typography variant="h6" gutterBottom>
               🎸 新增練習曲目
             </Typography>
@@ -176,7 +192,7 @@ function App() {
                 </Button>
               </Stack>
             </Box>
-          </Paper>
+          </AddSongPaper>
 
           {/* 歌曲列表 */}
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
@@ -185,7 +201,7 @@ function App() {
 
           <List>
             {songs.map((song) => (
-              <Paper key={song.id} sx={{ mb: 2, overflow: 'hidden' }}>
+              <SongPaper key={song.id}>
                 <ListItem
                   secondaryAction={
                     <IconButton edge="end" aria-label="delete" color="error" onClick={() => handleClickDelete(song.id)}>
@@ -209,23 +225,28 @@ function App() {
                     }
                     secondary={song.artist || 'Unknown Artist'}
                   />
-                  {/* 狀態標籤放在 ListItemText 外面 */}
-                  <Chip
-                    label={song.status}
-                    size="small"
-                    color={song.status === 'MASTERED' ? 'success' : 'primary'}
-                    variant="outlined"
-                    sx={{ mr: 1 }}
-                  />
+                  {/* 狀態下拉選單 */}
+                  <FormControl size="small" sx={{ minWidth: 120, mr: 1 }}>
+                    <StatusSelect
+                      value={song.status}
+                      onChange={(e) => handleUpdateStatus(song.id, e.target.value as string)}
+                      disabled={disabledSongs.has(song.id)}
+                      variant="outlined"
+                      isMastered={song.status === 'MASTERED'}
+                    >
+                      <MenuItem value="PRACTICING">練習中</MenuItem>
+                      <MenuItem value="MASTERED">已精通</MenuItem>
+                    </StatusSelect>
+                  </FormControl>
                 </ListItem>
-              </Paper>
+              </SongPaper>
             ))}
 
             {songs.length === 0 && (
-              <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+              <EmptyStateBox>
                 <PlayCircleOutlineIcon sx={{ fontSize: 60, opacity: 0.5 }} />
                 <Typography>目前沒有練習曲目，快去新增吧！</Typography>
-              </Box>
+              </EmptyStateBox>
             )}
           </List>
 
@@ -237,10 +258,10 @@ function App() {
             aria-labelledby="alert-dialog-title"
             aria-describedby="alert-dialog-description"
           >
-            <DialogTitle id="alert-dialog-title" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DialogTitleBox id="alert-dialog-title">
               <WarningAmberIcon color="warning" />
               確認刪除？
-            </DialogTitle>
+            </DialogTitleBox>
             <DialogContent>
               <DialogContentText id="alert-dialog-description">
                 刪除後就救不回來囉！你確定要放棄這首歌的練習進度嗎？
@@ -256,7 +277,7 @@ function App() {
             </DialogActions>
           </Dialog>
 
-        </Container>
+        </StyledContainer>
       </ThemeProvider>
     </AppContainer>
   );

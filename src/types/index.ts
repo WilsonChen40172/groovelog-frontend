@@ -1,6 +1,7 @@
 // 定義通用的 API 回傳格式 (如果有統一包裝的話，目前我們直接回傳陣列)
 // 但我們先把 Song 定義好
-export type SongStatus = 'WANT_TO_PLAY' | 'PRACTICING' | 'MASTERED';
+// export type SongStatus = 'WANT_TO_PLAY' | 'PRACTICING' | 'MASTERED';
+export type SongStatus = string;
 
 export interface Song {
     id: number;
