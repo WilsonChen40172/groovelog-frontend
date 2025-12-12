@@ -37,6 +37,11 @@ export const songApi = {
     updateStatus: async (id: number, status: SongStatus) => {
         const response = await apiClient.patch<Song>(`/songs/${id}/status`, { status });
         return response.data;
+    },
+
+    // 更新樂器進度
+    updateProgress: async (instrumentId: number, progress: number) => {
+        await apiClient.patch(`/instruments/${instrumentId}`, { progress });
     }
 };
 
